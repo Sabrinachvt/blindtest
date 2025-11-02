@@ -20,7 +20,6 @@ export default function PlayPage() {
   const [tmpName, setTmpName] = useState("");
   const [tmpTable, setTmpTable] = useState("");
 
-  // 👉 fonction qu'on pourra réutiliser (temps réel + polling)
   const loadCurrentQuestion = async (teamId?: string) => {
     const { data: current } = await supabase
       .from("current_question")
@@ -34,10 +33,8 @@ export default function PlayPage() {
         .select("*")
         .eq("id", current.question_id)
         .single();
-
       setQuestion(q);
 
-      // est-ce que cette équipe a déjà répondu à CETTE question ?
       if (teamId) {
         const { data: ans } = await supabase
           .from("answers")
@@ -58,7 +55,6 @@ export default function PlayPage() {
   };
 
   useEffect(() => {
-    // 1) on regarde si on a déjà une équipe
     const saved =
       typeof window !== "undefined" ? localStorage.getItem("bt_team") : null;
 
@@ -71,26 +67,17 @@ export default function PlayPage() {
       setLoading(false);
     }
 
-    // 2) abonnement temps réel (si activé sur Supabase)
     const channel = supabase
       .channel("question_changes")
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "current_question" },
-        async (payload) => {
-          const qid = (payload.new as any).question_id;
-          if (!qid) {
-            setQuestion(null);
-            setSent(false);
-            return;
-          }
-          // on recharge la question
+        async () => {
           await loadCurrentQuestion(team?.id);
         }
       )
       .subscribe();
 
-    // 3) POLLING de secours toutes les 3 secondes
     const interval = setInterval(() => {
       loadCurrentQuestion(team?.id);
     }, 3000);
@@ -103,15 +90,15 @@ export default function PlayPage() {
 
   const handleCreateTeam = async () => {
     if (!tmpName.trim()) {
-      alert("Donnez un nom de table 😎");
+      alert("Donne un nom de table ✨");
       return;
     }
     if (!tmpTable.trim()) {
       alert("Le numéro de table est obligatoire 🤚");
       return;
     }
-    const tableNum = Number(tmpTable);
-    if (Number.isNaN(tableNum)) {
+    const num = Number(tmpTable);
+    if (Number.isNaN(num)) {
       alert("Le numéro de table doit être un nombre");
       return;
     }
@@ -120,7 +107,7 @@ export default function PlayPage() {
       .from("teams")
       .upsert({
         name: tmpName.trim(),
-        table_number: tableNum,
+        table_number: num,
       })
       .select()
       .single();
@@ -155,84 +142,165 @@ export default function PlayPage() {
     return <p style={{ padding: 20 }}>Chargement…</p>;
   }
 
-  // écran d'inscription
+  // écran d’inscription
   if (askTeam) {
     return (
-      <div style={{ maxWidth: 480, margin: "20px auto", fontFamily: "sans-serif" }}>
-        <h2>Blind Test 🎵</h2>
-        <p>Bienvenue !</p>
-        <input
-          value={tmpName}
-          onChange={(e) => setTmpName(e.target.value)}
-          placeholder="Nom de table"
-          style={{ width: "100%", marginBottom: 8, padding: 6 }}
-        />
-        <input
-          value={tmpTable}
-          onChange={(e) => setTmpTable(e.target.value)}
-          placeholder="Numéro de table (obligatoire)"
-          style={{ width: "100%", marginBottom: 8, padding: 6 }}
-        />
-        <button
-          onClick={handleCreateTeam}
-          style={{ width: "100%", padding: 10, cursor: "pointer" }}
-        >
-          Valider ✅
-        </button>
+      <div style={styles.page}>
+        <div style={styles.card}>
+          <h1 style={styles.title}>Blind Test Disco 🪩</h1>
+          <p style={styles.subtitle}>1 téléphone par table</p>
+          <input
+            value={tmpName}
+            onChange={(e) => setTmpName(e.target.value)}
+            placeholder="Nom de la table"
+            style={styles.input}
+          />
+          <input
+            value={tmpTable}
+            onChange={(e) => setTmpTable(e.target.value)}
+            placeholder="Numéro de table (obligatoire)"
+            style={styles.input}
+          />
+          <button onClick={handleCreateTeam} style={styles.primaryButton}>
+            Rejoindre ✅
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 480, margin: "20px auto", fontFamily: "sans-serif" }}>
-      <h2>Blind Test 🎵</h2>
-      <p>
-        <strong>Équipe :</strong> {team?.name}{" "}
-        {team?.table_number ? `(Table ${team.table_number})` : null}
-      </p>
+    <div style={styles.page}>
+      <div style={styles.card}>
+        <div style={{ marginBottom: 16 }}>
+          <div style={styles.badge}>
+            {team?.table_number ? `Table ${team.table_number}` : "Table"}
+          </div>
+          <h2 style={styles.titleSmall}>{team?.name}</h2>
+        </div>
 
-      {!question ? (
-        <p>En attente de la prochaine question…</p>
-      ) : !question.is_open ? (
-        <p
-          style={{
-            background: "#fff3cd",
-            padding: 10,
-            borderRadius: 8,
-            border: "1px solid #ffeeba",
-          }}
-        >
-          Question fermée ✅
-          <br />
-          Attends la prochaine…
-        </p>
-      ) : sent ? (
-        <p>✅ Réponse envoyée. Attends la prochaine.</p>
-      ) : (
-        <>
-          <p>
-            <strong>{question.label}</strong>
-          </p>
-          <input
-            value={artist}
-            onChange={(e) => setArtist(e.target.value)}
-            placeholder="Artiste"
-            style={{ width: "100%", marginBottom: 8, padding: 6 }}
-          />
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Titre"
-            style={{ width: "100%", marginBottom: 8, padding: 6 }}
-          />
-          <button
-            onClick={handleSubmit}
-            style={{ width: "100%", padding: 10, cursor: "pointer" }}
-          >
-            Envoyer ✅
-          </button>
-        </>
-      )}
+        {!question ? (
+          <p style={styles.muted}>En attente de la prochaine question…</p>
+        ) : !question.is_open ? (
+          <div style={styles.alert}>
+            Question fermée ✅ <br /> Attends la prochaine musique…
+          </div>
+        ) : sent ? (
+          <div style={styles.success}>
+            Réponse envoyée ✅
+            <p style={styles.muted}>Attends la prochaine question</p>
+          </div>
+        ) : (
+          <>
+            <p style={styles.question}>{question.label}</p>
+            <input
+              value={artist}
+              onChange={(e) => setArtist(e.target.value)}
+              placeholder="Artiste"
+              style={styles.input}
+            />
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Titre"
+              style={styles.input}
+            />
+            <button onClick={handleSubmit} style={styles.primaryButton}>
+              Envoyer 🎯
+            </button>
+          </>
+        )}
+      </div>
+      <p style={styles.footer}>Made for fondue disco ✨</p>
     </div>
   );
 }
+
+const styles: Record<string, any> = {
+  page: {
+    minHeight: "100vh",
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "center",
+    justifyContent: "center",
+    background: "radial-gradient(circle at top, #1f2937 0%, #0f172a 50%, #020617 100%)",
+    padding: 16,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 460,
+    background: "rgba(2,6,23,0.5)",
+    border: "1px solid rgba(148,163,184,0.2)",
+    borderRadius: 18,
+    padding: 18,
+    backdropFilter: "blur(8px)",
+  },
+  title: {
+    fontSize: 26,
+    marginBottom: 6,
+  },
+  titleSmall: {
+    fontSize: 20,
+    margin: 0,
+  },
+  subtitle: {
+    color: "#94a3b8",
+    marginBottom: 12,
+  },
+  input: {
+    width: "100%",
+    background: "rgba(15,23,42,0.6)",
+    border: "1px solid rgba(148,163,184,0.3)",
+    borderRadius: 10,
+    padding: "10px 12px",
+    color: "#e2e8f0",
+    marginBottom: 10,
+    fontSize: 15,
+  },
+  primaryButton: {
+    width: "100%",
+    background: "linear-gradient(135deg, #f97316, #a855f7)",
+    border: "none",
+    borderRadius: 10,
+    padding: "10px 12px",
+    color: "white",
+    fontWeight: 600,
+    cursor: "pointer",
+    fontSize: 15,
+  },
+  badge: {
+    display: "inline-block",
+    background: "rgba(248, 113, 113, 0.2)",
+    border: "1px solid rgba(248, 113, 113, 0.4)",
+    borderRadius: 9999,
+    padding: "4px 10px",
+    fontSize: 12,
+    color: "#e2e8f0",
+    marginBottom: 4,
+  },
+  question: {
+    fontWeight: 600,
+    marginBottom: 10,
+  },
+  alert: {
+    background: "rgba(251, 191, 36, 0.12)",
+    border: "1px solid rgba(251, 191, 36, 0.3)",
+    borderRadius: 10,
+    padding: 10,
+  },
+  success: {
+    background: "rgba(34, 197, 94, 0.08)",
+    border: "1px solid rgba(34, 197, 94, 0.3)",
+    borderRadius: 10,
+    padding: 10,
+  },
+  muted: {
+    color: "#94a3b8",
+    margin: 0,
+  },
+  footer: {
+    marginTop: 14,
+    fontSize: 12,
+    color: "rgba(226,232,240,0.4)",
+  },
+};
