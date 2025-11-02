@@ -20,6 +20,7 @@ export default function PlayPage() {
   const [tmpName, setTmpName] = useState("");
   const [tmpTable, setTmpTable] = useState("");
 
+  // charge / recharge la question active
   const loadCurrentQuestion = async (teamId?: string) => {
     const { data: current } = await supabase
       .from("current_question")
@@ -28,13 +29,24 @@ export default function PlayPage() {
       .maybeSingle();
 
     if (current?.question_id) {
+      const previousQuestionId = question?.id;
+
       const { data: q } = await supabase
         .from("questions")
         .select("*")
         .eq("id", current.question_id)
         .single();
+
+      // si on passe à une nouvelle question -> on vide les champs
+      if (!previousQuestionId || previousQuestionId !== q.id) {
+        setArtist("");
+        setTitle("");
+        setSent(false);
+      }
+
       setQuestion(q);
 
+      // vérifier si cette équipe a déjà répondu
       if (teamId) {
         const { data: ans } = await supabase
           .from("answers")
@@ -42,7 +54,16 @@ export default function PlayPage() {
           .eq("team_id", teamId)
           .eq("question_id", current.question_id)
           .maybeSingle();
-        setSent(!!ans);
+
+        if (ans) {
+          setSent(true);
+          setArtist(ans.artist || "");
+          setTitle(ans.title || "");
+        } else {
+          setSent(false);
+          setArtist("");
+          setTitle("");
+        }
       } else {
         setSent(false);
       }
@@ -55,6 +76,7 @@ export default function PlayPage() {
   };
 
   useEffect(() => {
+    // 1) voir si on a déjà une équipe
     const saved =
       typeof window !== "undefined" ? localStorage.getItem("bt_team") : null;
 
@@ -67,6 +89,7 @@ export default function PlayPage() {
       setLoading(false);
     }
 
+    // 2) écouter le changement de question (admin)
     const channel = supabase
       .channel("question_changes")
       .on(
@@ -78,6 +101,7 @@ export default function PlayPage() {
       )
       .subscribe();
 
+    // 3) polling de secours
     const interval = setInterval(() => {
       loadCurrentQuestion(team?.id);
     }, 3000);
@@ -86,8 +110,9 @@ export default function PlayPage() {
       supabase.removeChannel(channel);
       clearInterval(interval);
     };
-  }, [team?.id]);
+  }, [team?.id, question?.id]);
 
+  // création d'équipe
   const handleCreateTeam = async () => {
     if (!tmpName.trim()) {
       alert("Donne un nom de table ✨");
@@ -122,6 +147,7 @@ export default function PlayPage() {
     }
   };
 
+  // envoi de réponse
   const handleSubmit = async () => {
     if (!team || !question) return;
     if (!question.is_open) return;
@@ -138,11 +164,23 @@ export default function PlayPage() {
     }
   };
 
+  // bouton "changer de table" (pour les tests / au cas où)
+  const handleResetTeam = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("bt_team");
+    }
+    setTeam(null);
+    setAskTeam(true);
+    setSent(false);
+    setArtist("");
+    setTitle("");
+  };
+
   if (loading) {
     return <p style={{ padding: 20 }}>Chargement…</p>;
   }
 
-  // écran d’inscription
+  // écran d'inscription
   if (askTeam) {
     return (
       <div style={styles.page}>
@@ -169,14 +207,28 @@ export default function PlayPage() {
     );
   }
 
+  // écran de jeu
   return (
     <div style={styles.page}>
       <div style={styles.card}>
-        <div style={{ marginBottom: 16 }}>
-          <div style={styles.badge}>
-            {team?.table_number ? `Table ${team.table_number}` : "Table"}
+        <div
+          style={{
+            marginBottom: 16,
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 8,
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <div style={styles.badge}>
+              {team?.table_number ? `Table ${team.table_number}` : "Table"}
+            </div>
+            <h2 style={styles.titleSmall}>{team?.name}</h2>
           </div>
-          <h2 style={styles.titleSmall}>{team?.name}</h2>
+          <button onClick={handleResetTeam} style={styles.resetBtn} title="Changer de table">
+            🔁
+          </button>
         </div>
 
         {!question ? (
@@ -223,7 +275,8 @@ const styles: Record<string, any> = {
     flexDirection: "column" as const,
     alignItems: "center",
     justifyContent: "center",
-    background: "radial-gradient(circle at top, #1f2937 0%, #0f172a 50%, #020617 100%)",
+    background:
+      "radial-gradient(circle at top, #1f2937 0%, #0f172a 50%, #020617 100%)",
     padding: 16,
   },
   card: {
@@ -302,5 +355,16 @@ const styles: Record<string, any> = {
     marginTop: 14,
     fontSize: 12,
     color: "rgba(226,232,240,0.4)",
+  },
+  resetBtn: {
+    background: "rgba(15,23,42,0.6)",
+    border: "1px solid rgba(148,163,184,0.3)",
+    borderRadius: 9999,
+    width: 36,
+    height: 36,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
   },
 };
