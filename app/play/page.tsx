@@ -13,15 +13,16 @@ export default function PlayPage() {
   const [team, setTeam] = useState<Team | null>(null);
   const [question, setQuestion] = useState<any>(null);
   const [sent, setSent] = useState(false);
-  const [artist, setArtist] = useState("");
-  const [title, setTitle] = useState("");
+  const [textAnswer, setTextAnswer] = useState("");
   const [loading, setLoading] = useState(true);
   const [askTeam, setAskTeam] = useState(false);
   const [tmpName, setTmpName] = useState("");
   const [tmpTable, setTmpTable] = useState("");
 
+  // pour savoir si la question a changé
   const currentQuestionId = useRef<number | null>(null);
 
+  // charge la question actuelle
   const loadCurrentQuestion = async (teamId?: string) => {
     const { data: current } = await supabase
       .from("current_question")
@@ -29,15 +30,17 @@ export default function PlayPage() {
       .eq("id", 1)
       .maybeSingle();
 
+    // pas de question active
     if (!current?.question_id) {
       setQuestion(null);
       setSent(false);
       return;
     }
 
-    // ⚠️ Ne recharge rien si la question n’a pas changé
+    // si c'est la même question, on ne touche pas aux champs
     if (currentQuestionId.current === current.question_id) return;
 
+    // nouvelle question
     currentQuestionId.current = current.question_id;
 
     const { data: q } = await supabase
@@ -47,11 +50,10 @@ export default function PlayPage() {
       .single();
 
     setQuestion(q);
-    setArtist("");
-    setTitle("");
+    setTextAnswer("");
     setSent(false);
 
-    // Vérifie si l’équipe a déjà répondu à cette nouvelle question
+    // vérifier si cette équipe a déjà répondu à CETTE question
     if (teamId) {
       const { data: ans } = await supabase
         .from("answers")
@@ -62,8 +64,7 @@ export default function PlayPage() {
 
       if (ans) {
         setSent(true);
-        setArtist(ans.artist || "");
-        setTitle(ans.title || "");
+        setTextAnswer((ans as any).text_answer || "");
       }
     }
 
@@ -71,6 +72,7 @@ export default function PlayPage() {
   };
 
   useEffect(() => {
+    // récupérer l'équipe stockée sur le téléphone
     const saved =
       typeof window !== "undefined" ? localStorage.getItem("bt_team") : null;
 
@@ -83,6 +85,7 @@ export default function PlayPage() {
       setLoading(false);
     }
 
+    // abonnement Supabase quand l'admin change de question
     const channel = supabase
       .channel("question_changes")
       .on(
@@ -94,6 +97,7 @@ export default function PlayPage() {
       )
       .subscribe();
 
+    // polling de secours toutes les 3 secondes
     const interval = setInterval(() => {
       loadCurrentQuestion(team?.id);
     }, 3000);
@@ -104,6 +108,7 @@ export default function PlayPage() {
     };
   }, [team?.id]);
 
+  // création d'équipe
   const handleCreateTeam = async () => {
     if (!tmpName.trim()) {
       alert("Donne un nom d'équipe original ✨");
@@ -138,18 +143,23 @@ export default function PlayPage() {
     }
   };
 
+  // envoi de la réponse
   const handleSubmit = async () => {
     if (!team || !question) return;
     if (!question.is_open) return;
-    if (sent) return;
+    if (sent) return; // empêche le double clic
+
+    if (!textAnswer.trim()) {
+      alert("Écris au moins quelque chose 😄");
+      return;
+    }
 
     setSent(true);
 
     const { error } = await supabase.from("answers").upsert({
       team_id: team.id,
       question_id: question.id,
-      artist,
-      title,
+      text_answer: textAnswer,
     });
 
     if (error) {
@@ -158,6 +168,7 @@ export default function PlayPage() {
     }
   };
 
+  // reset (utile en test / si une table s'est trompée de numéro)
   const handleResetTeam = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("bt_team");
@@ -165,8 +176,7 @@ export default function PlayPage() {
     setTeam(null);
     setAskTeam(true);
     setSent(false);
-    setArtist("");
-    setTitle("");
+    setTextAnswer("");
     currentQuestionId.current = null;
   };
 
@@ -174,6 +184,7 @@ export default function PlayPage() {
     return <p style={{ padding: 20 }}>Chargement…</p>;
   }
 
+  // écran inscription
   if (askTeam) {
     return (
       <div style={styles.page}>
@@ -204,6 +215,7 @@ export default function PlayPage() {
     );
   }
 
+  // écran de jeu
   return (
     <div style={styles.page}>
       <div style={styles.card}>
@@ -234,15 +246,9 @@ export default function PlayPage() {
           <>
             <p style={styles.question}>{question.label}</p>
             <input
-              value={artist}
-              onChange={(e) => setArtist(e.target.value)}
-              placeholder="Artiste"
-              style={styles.input}
-            />
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Titre"
+              value={textAnswer}
+              onChange={(e) => setTextAnswer(e.target.value)}
+              placeholder="Artiste + Titre (ex : Stromae - Papaoutai)"
               style={styles.input}
             />
             <button onClick={handleSubmit} style={styles.primaryButton}>
