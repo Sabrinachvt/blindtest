@@ -242,18 +242,25 @@ export default function PlayPage() {
             Réponse envoyée ✅
             <p style={styles.muted}>Attends la prochaine question</p>
           </div>
-        ) : (
+                       ) : (
           <>
-            <p style={styles.question}>{question.label}</p>
+            <p style={styles.question}>
+              Question {question.question_number}
+            </p>
+
             <input
               value={textAnswer}
               onChange={(e) => setTextAnswer(e.target.value)}
               placeholder="Artiste + Titre (ex : Stromae - Papaoutai)"
               style={styles.input}
             />
+
             <button onClick={handleSubmit} style={styles.primaryButton}>
               Envoyer 🎯
             </button>
+          </>
+        )   
+ 
           </>
         )}
       </div>
